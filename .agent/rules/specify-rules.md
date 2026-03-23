@@ -1,6 +1,6 @@
 # devtool Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-03-15
+Auto-generated from all feature plans. Last updated: 2026-03-23
 
 ## Active Technologies
 - Go (latest) (001-devtool-management)
@@ -28,9 +28,9 @@ tests/
 : Follow standard conventions
 
 ## Recent Changes
+- 004-telepresence-management: Added [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
 - 003-interactive-cli: Added Go 1.25 + `github.com/spf13/cobra` (existing), `gopkg.in/yaml.v3` (existing), `github.com/charmbracelet/bubbletea`, `github.com/charmbracelet/bubbles` (new)
 - 002-devtool-add-remove: Added Go 1.21+ + `spf13/cobra` (CLI framework), internal config/checker packages
-- 001-devtool-management: Added Go (latest)
 
 
 <!-- MANUAL ADDITIONS START -->
