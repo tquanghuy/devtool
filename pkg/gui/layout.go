@@ -30,5 +30,5 @@ func (gui *Gui) layout() {
 
 func (gui *Gui) renderStatus() {
 	gui.status.Clear()
-	fmt.Fprint(gui.status, " [cyan]tab:[white] switch panel • [red]q:[white] quit • [green]a:[white] add • [red]d:[white] delete • [magenta]i:[white] info • [yellow]enter:[white] select")
+	fmt.Fprint(gui.status, " [cyan]tab:[white] switch panel • [red]esc:[white] quit • [green]a:[white] add • [red]d:[white] delete • [magenta]i:[white] info • [yellow]enter:[white] select")
 }

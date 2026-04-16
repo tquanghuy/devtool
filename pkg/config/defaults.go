@@ -32,5 +32,34 @@ func GetDefaultTools() map[string]ToolDefinition {
 			StartCmd:    "brew services start mysql",
 			StopCmd:     "brew services stop mysql",
 		},
+		"gcloud": {
+			Name:     "gcloud",
+			Kind:     Singleton,
+			CheckCmd: "gcloud auth list --filter=status:ACTIVE --format='value(account)' | grep -q .",
+			StartCmd: "gcloud auth login",
+		},
+		"cloud-sql-proxy": {
+			Name:        "cloud-sql-proxy",
+			Kind:        PortBound,
+			DefaultPort: 5432,
+			CheckCmd:    "lsof -i :%d >/dev/null 2>&1",
+			StartCmd:    "cloud-sql-proxy --port %d [INSTANCE_CONNECTION_NAME]",
+			StopCmd:     "pkill -f cloud-sql-proxy",
+		},
+		"pubsub-emulator": {
+			Name:        "pubsub-emulator",
+			Kind:        PortBound,
+			DefaultPort: 8085,
+			CheckCmd:    "curl -s localhost:%d >/dev/null 2>&1",
+			StartCmd:    "gcloud beta emulators pubsub start --host-port=0.0.0.0:%d",
+			StopCmd:     "pkill -f pubsub-emulator",
+		},
+		"firebase-emulator": {
+			Name:        "firebase-emulator",
+			Kind:        PortBound,
+			DefaultPort: 4000,
+			CheckCmd:    "curl -s localhost:%d >/dev/null 2>&1",
+			StartCmd:    "firebase emulators:start",
+		},
 	}
 }

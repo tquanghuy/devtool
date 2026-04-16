@@ -16,9 +16,12 @@ func (gui *Gui) keybindings() error {
 			return nil
 		}
 
-		if event.Rune() == 'q' {
-			gui.app.Stop()
-			return nil
+		if event.Key() == tcell.KeyEsc {
+			name, _ := gui.pages.GetFrontPage()
+			if name == "main" {
+				gui.handleQuit()
+				return nil
+			}
 		}
 
 		if event.Rune() == 'a' {
