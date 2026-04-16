@@ -20,32 +20,47 @@ This guide will help you set up and run `devtool` locally for development and te
    go mod tidy
    ```
 
-3. Run the CLI locally:
+3. Build and Run the application:
    ```bash
-   go run ./cmd/devtool
+   make build
+   ./devtool
    ```
-   *This will launch the TUI.*
+   *This will launch the interactive TUI.*
 
-4. Test basic CLI commands (without compiling):
-   ```bash
-   # Status check
-   go run ./cmd/devtool status
+## Development Workflow
 
-   # Add Postgres
-   go run ./cmd/devtool add postgres --port 5433
+`devtool` is designed to be **configuration-driven**. To add or modify tools:
 
-   # Remove Postgres
-   go run ./cmd/devtool remove postgres-5433
-   ```
+### 1. Unified Configuration
+Manage your development environment via `.devtool.yml`. You can define new tool types here:
 
-## Development Iterate Loop
+```yaml
+tools:
+  my-custom-service:
+    name: "my-service"
+    kind: "singleton"
+    start_cmd: "npm run dev"
+    stop_cmd: "pkill -f 'npm run dev'"
+    check_cmd: "curl -s localhost:3000"
+```
 
-When developing new features (e.g., adding a new database engine or tool type):
+### 2. Cascading Configs
+- **Global**: `~/.devtool.yml` (Applies everywhere)
+- **Local**: `./.devtool.yml` (Applies to the current project only)
 
-1. **Update the Manager**: Register the tool type in `internal/manager/` and define whether it's a Singleton or Port-Bound tool.
-2. **Update the Checker**: Implement necessary ping functionality in `internal/checker/` to verify the new tool's live status.
-3. **Update the TUI**: If the tool introduces unique workflows (similar to the Telepresence specific forms), build the necessary `.go` forms under `internal/tui/`. Ensure changes align with the current two-panel UI layout.
-4. **Test Configurations**: Manually verify `~/.devtool.yml` and `~/.devtool/managed.json` reflect the expected state changes. Clear these out if you need a clean slate during testing:
-   ```bash
-   rm ~/.devtool.yml ~/.devtool/managed.json
-   ```
+### 3. Modifying the Core
+If you need to change the application's internal behavior:
+- **`pkg/gui`**: Update the Tview-based TUI panels and modals.
+- **`pkg/config`**: Modify how configuration and managed states are handled.
+- **`pkg/commands`**: Update the command execution or status checking logic.
+
+## Resetting State
+If you need a clean slate during testing, you can remove the managed tool state:
+```bash
+rm ~/.devtool/managed.json
+```
+To reset your global configuration:
+```bash
+rm ~/.devtool.yml
+```
+

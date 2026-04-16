@@ -7,6 +7,7 @@ import (
 
 func (gui *Gui) layout() {
 	flex := tview.NewFlex().SetDirection(tview.FlexRow)
+	flex.AddItem(gui.resources, 8, 1, false)
 	
 	content := tview.NewFlex().SetDirection(tview.FlexColumn)
 	content.AddItem(gui.tools, 0, 1, true)
@@ -19,6 +20,7 @@ func (gui *Gui) layout() {
 
 	gui.renderTools()
 	gui.renderConnections()
+	gui.renderResources()
 	gui.renderStatus()
 }
 

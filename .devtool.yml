@@ -1,0 +1,7 @@
+tools:
+  ping-checker:
+    name: "ping-checker"
+    kind: "singleton"
+    check_cmd: "ls dummy_ping.txt >/dev/null 2>&1"
+    start_cmd: "touch dummy_ping.txt"
+    stop_cmd: "rm dummy_ping.txt"
