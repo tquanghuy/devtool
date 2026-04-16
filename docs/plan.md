@@ -2,33 +2,35 @@
 
 ## Overview
 
-`devtool` is a Go-based CLI and TUI application designed to seamlessly manage local developer services and configurations. It orchestrates tools like Docker, Telepresence, Postgres, and MySQL, simplifying the process of checking statuses, managing multiple database instances, and controlling proxy tunnels.
+`devtool` is a **centralized, configuration-driven development tool management system**. Its goal is to provide a single interactive entry point for managing *every* tool a developer needs, from global infrastructure (Docker, Telepresence) to project-specific services (Postgres, local APIs, Redis).
+
+## Vision: The Single Point of Truth
+- **Universal**: Manage ANY tool that can be checked, started, or stopped via shell commands.
+- **Contextual**: Automatically adapt toolsets based on the current working directory.
+- **Visual**: Power-user TUI for real-time monitoring and control.
 
 ## Architecture
 
-The project is structured following standard Go practices, roughly divided between standard CLI invocation and an interactive Terminal User Interface (TUI).
+The project follows a modular Go structure:
 
-- **`cmd/devtool/main.go`**: The entry point.
-- **`internal/cli`**: Contains Cobra-based command definitions (`add`, `remove`, `status`). It handles both standard flag-based execution and routes to the TUI if no subcommands are provided.
-- **`internal/tui`**: The interactive interface built with Bubble Tea. Features a two-panel layout (formerly tabbed) for visual, interactive management of Connections and Tools.
-- **`internal/manager`**: The core business logic for adding, removing, and changing the state of tools. It bridges the CLI/TUI layer and the configuration state.
-- **`internal/checker`**: Responsible for determining if a service is actively running and accessible.
-- **`internal/config`**: Manages the reading, writing, and validation of persistent states (`~/.devtool.yml` for database hosts/ports and `~/.devtool/managed.json` for managed tool lifecycles).
+- **`cmd/devtool`**: The entry point.
+- **`pkg/gui`**: TUI implementation using `tview`. Features a two-panel layout (`Tools` and `Connections`).
+- **`pkg/config`**: Cascading configuration logic. Handles defaults, `~/.devtool.yml` (Global), and `./.devtool.yml` (Local).
+- **`pkg/commands`**: Shell command execution wrapper (`OSCommand`) and core status checking logic.
 
 ## Core Workflows
 
-### 1. Initialization and Status
-When invoked via `devtool status`, the application iterates over the `ManagedConfig` list, pings each service using the `checker`, and outputs their live status. When invoked as `devtool` (no arguments), the TUI loads, presenting real-time status in an interactive format.
+### 1. Unified Status Monitoring
+On startup, `devtool` merges all available tool definitions from global and local configs. It continuously polls their status using the defined `check_cmd`.
 
-### 2. Managing Connections (Port-Bound Tools)
-Users can add multiple instances of port-bound tools (like Postgres or MySQL) by specifying differe ports. The manager handles disambiguation, prompts for port mapping, and guarantees uniqueness across the `Identifier` field (e.g., `postgres-5432`).
+### 2. Context-Aware Management
+When you open `devtool` in a project directory, it detects the local `.devtool.yml`. This allows you to manage microservices or databases specific to that project alongside your global tools like Docker.
 
-### 3. Managing Singleton Tools
-Tools like Docker and Telepresence are Singletons. The system enforces that only one instance of these tools can exist in the managed configuration at a time. The TUI provides dedicated forms or flows, like connecting/disconnecting Telepresence directly from the interface.
+### 3. Dynamic Tool Lifecycle
+Users can "Add" a tool to their active workbench. For `singleton` tools, only one instance is tracked. For `portbound` tools, multiple instances (disambiguated by ports) can be managed simultaneously.
 
-## AI Agent Integration
+## Future Roadmap
 
-The project has established guidelines in `AGENTS.md` for AI agent contributions, emphasizing:
-- Preserving the TUI/CLI paradigms.
-- Disambiguating port-bound resources.
-- Following idiomatic Go and maintaining documentation integrity.
+- **Log Streaming**: Tailing stdout/stderr of managed tools directly in the TUI.
+- **Bulk Actions**: Start/Stop "Stacks" of related tools with one command.
+- **Resource Monitoring**: Real-time CPU/RAM metrics for managed processes.

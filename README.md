@@ -1,70 +1,46 @@
 # devtool
 
-A CLI tool to manage local developer services and configurations.
+`devtool` is a **centralized, configuration-driven development tool management system**. It acts as a single point of truth for every tool a developer needs, from global infrastructure like Docker and Telepresence to project-specific microservices and databases.
 
-## Commands
+## The Goal
 
-### `devtool status`
+The goal of `devtool` is to simplify the local development environment by providing a unified interface to:
+- **Orchestrate Tools**: Start, stop, and monitor the health of any developer tool.
+- **Context-Specific Configuration**: Automatically load different toolsets based on the project you are working in (Global vs. Local `.devtool.yml`).
+- **Universal Extensibility**: Define *any* tool (Redis, Kafka, local APIs) using simple shell commands.
+- **Visual Management**: An interactive TUI (Terminal User Interface) influenced by `lazydocker` and `k9s` for at-a-glance status and control.
 
-Check the status of all configured developer tools (Postgres, MySQL, Docker, Telepresence).
+## Usage
 
-```bash
-devtool status
-```
-
-### `devtool add`
-
-Add a supported tool to devtool's managed list.
+Simply run `devtool` to launch the interactive TUI:
 
 ```bash
-# Add a singleton tool (may only be added once)
-devtool add docker
-devtool add telepresence
-
-# Add a port-bound tool on its default port
-devtool add postgres
-devtool add mysql
-
-# Add a port-bound tool on a specific port
-devtool add postgres --port 5433
-
-# Fail instead of prompting (useful in scripts)
-devtool add postgres --non-interactive
+devtool
 ```
 
-**Supported tools**
-
-| Tool         | Type       | Default Port |
-|--------------|------------|--------------|
-| docker       | Singleton  | —            |
-| telepresence | Singleton  | —            |
-| postgres     | Port-bound | 5432         |
-| mysql        | Port-bound | 3306         |
-
-### `devtool remove`
-
-Remove a tool from the managed list.
-
-```bash
-# Remove a singleton tool
-devtool remove docker
-
-# Remove a port-bound tool (prompts to select instance if multiple exist)
-devtool remove postgres
-
-# Remove a specific instance by ID
-devtool remove postgres-5433
-
-# Terminate a running tool and remove it in one step
-devtool remove postgres --force
-
-# Non-interactive mode (fails if disambiguation or stop-confirmation is needed)
-devtool remove postgres --non-interactive
-```
-
-
+### Key Features
+- **Cascading Config**: Merges embedded defaults, global `~/.devtool.yml`, and project-local `./.devtool.yml`.
+- **Tool Kinds**: Supports `singleton` (daemon-like) and `portbound` (database-like) resources.
+- **Rich TUI**: Manage connections, tools, and logs in a unified, keyboard-centric interface.
 
 ## Configuration
 
-Managed tool state is stored in `~/.devtool/managed.json` (created automatically on first use).
-App configuration (database hosts/ports) is loaded from `~/.devtool.yml`.
+### Global Configuration (`~/.devtool.yml`)
+Define tools and settings that you want available across all projects.
+
+### Local Configuration (`./.devtool.yml`)
+Define tools specific to your current repository. Local definitions can override global ones for tailored project workflows.
+
+```yaml
+tools:
+  my-local-api:
+    name: "local-api"
+    kind: "singleton"
+    start_cmd: "go run main.go"
+    stop_cmd: "pkill -f local-api"
+    check_cmd: "curl -s localhost:8080/health"
+```
+
+## Storage
+- **Managed Tool Entries**: `~/.devtool/managed.json` tracks which tools you have "added" to your active workbench.
+- **Dynamic State**: Status is checked in real-time using your defined `check_cmd`.

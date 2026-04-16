@@ -16,11 +16,21 @@ type DatabaseConfig struct {
 	Database string `yaml:"database" json:"database"`
 }
 
-// DevtoolProfile represents a user-configured developer tool entry.
-type DevtoolProfile struct {
-	Name       string `yaml:"name"`
-	Executable string `yaml:"executable"`
-	Args       string `yaml:"args"`
+type ToolKind string
+
+const (
+	Singleton ToolKind = "singleton"
+	PortBound ToolKind = "portbound"
+)
+
+// ToolDefinition represents a managed developer tool's configuration and operations.
+type ToolDefinition struct {
+	Name        string   `yaml:"name" json:"name"`
+	Kind        ToolKind `yaml:"kind" json:"kind"`
+	DefaultPort int      `yaml:"default_port" json:"default_port"`
+	CheckCmd    string   `yaml:"check_cmd" json:"check_cmd"`
+	StartCmd    string   `yaml:"start_cmd" json:"start_cmd"`
+	StopCmd     string   `yaml:"stop_cmd" json:"stop_cmd"`
 }
 
 // AppConfig is the top-level configuration for devtool
@@ -28,8 +38,9 @@ type AppConfig struct {
 	Postgres    DatabaseConfig            `yaml:"postgres" json:"postgres"`
 	MySQL       DatabaseConfig            `yaml:"mysql" json:"mysql"`
 	Connections map[string]DatabaseConfig `yaml:"connections" json:"connections"`
-	Devtools    []DevtoolProfile         `yaml:"devtools" json:"devtools"`
+	Tools       map[string]ToolDefinition `yaml:"tools" json:"tools"`
 }
+
 
 const (
 	configFileName = ".devtool.yml"
@@ -44,40 +55,61 @@ func GetConfigPath() (string, error) {
 	return filepath.Join(home, configFileName), nil
 }
 
-// Load reads the application configuration
-func Load() (*AppConfig, error) {
-	path, err := GetConfigPath()
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return &AppConfig{
-				Postgres:    DatabaseConfig{Host: "localhost", Port: 5432, User: "postgres", Database: "postgres"},
-				MySQL:       DatabaseConfig{Host: "localhost", Port: 3306, User: "root", Database: "mysql"},
-				Connections: make(map[string]DatabaseConfig),
-				Devtools:    []DevtoolProfile{},
-			}, nil
-		}
-		return nil, fmt.Errorf("failed to read config file: %w", err)
-	}
-
-	var cfg AppConfig
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("failed to parse yaml config: %w", err)
-	}
-
-	if cfg.Connections == nil {
-		cfg.Connections = make(map[string]DatabaseConfig)
-	}
-	if cfg.Devtools == nil {
-		cfg.Devtools = []DevtoolProfile{}
-	}
-
-	return &cfg, nil
+// GetLocalConfigPath returns the path to a .devtool.yml in the current directory.
+func GetLocalConfigPath() string {
+	return configFileName
 }
+
+
+// Load reads the application configuration by merging defaults, global config, and local config.
+func Load() (*AppConfig, error) {
+	cfg := &AppConfig{
+		Postgres:    DatabaseConfig{Host: "localhost", Port: 5432, User: "postgres", Database: "postgres"},
+		MySQL:       DatabaseConfig{Host: "localhost", Port: 3306, User: "root", Database: "mysql"},
+		Connections: make(map[string]DatabaseConfig),
+		Tools:       GetDefaultTools(),
+	}
+
+	// 1. Load Global Config
+	globalPath, err := GetConfigPath()
+	if err == nil {
+		if data, err := os.ReadFile(globalPath); err == nil {
+			var globalCfg AppConfig
+			if err := yaml.Unmarshal(data, &globalCfg); err == nil {
+				mergeConfigs(cfg, &globalCfg)
+			}
+		}
+	}
+
+	// 2. Load Local Config
+	localPath := GetLocalConfigPath()
+	if data, err := os.ReadFile(localPath); err == nil {
+		var localCfg AppConfig
+		if err := yaml.Unmarshal(data, &localCfg); err == nil {
+			mergeConfigs(cfg, &localCfg)
+		}
+	}
+
+	return cfg, nil
+}
+
+func mergeConfigs(base, override *AppConfig) {
+	if override.Postgres.Host != "" {
+		base.Postgres = override.Postgres
+	}
+	if override.MySQL.Host != "" {
+		base.MySQL = override.MySQL
+	}
+	for k, v := range override.Connections {
+		base.Connections[k] = v
+	}
+	if override.Tools != nil {
+		for k, v := range override.Tools {
+			base.Tools[k] = v
+		}
+	}
+}
+
 
 // Save writes the application configuration atomically
 func Save(cfg *AppConfig) error {

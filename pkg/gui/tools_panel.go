@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"github.com/rivo/tview"
 	"github.com/gdamore/tcell/v2"
-	"devtool/pkg/commands"
 	"devtool/pkg/config"
 )
+
 
 func (gui *Gui) renderTools() {
 	gui.tools.Clear()
@@ -28,18 +28,31 @@ func (gui *Gui) renderTools() {
 	gui.tools.SetCell(0, 0, headerName)
 	gui.tools.SetCell(0, 1, headerStatus)
 
-	var toolsToShow []commands.ToolDefinition
-	// Ensure core singletons are included
+	var toolsToShow []config.ToolDefinition
+	
+	// Add core singletons from config if they are managed or should always be shown
 	coreTools := []string{"docker", "telepresence"}
 	for _, name := range coreTools {
-		if t, ok := commands.LookupTool(name); ok {
+		if t, ok := gui.Config.Tools[name]; ok {
 			toolsToShow = append(toolsToShow, t)
 		}
 	}
 
 	// Add managed instances
 	for _, inst := range gui.Managed.Instances {
-		if t, ok := commands.LookupTool(inst.ToolName); ok {
+		// Avoid double-adding core singletons
+		isCore := false
+		for _, ct := range coreTools {
+			if inst.ToolName == ct {
+				isCore = true
+				break
+			}
+		}
+		if isCore {
+			continue
+		}
+
+		if t, ok := gui.Config.Tools[inst.ToolName]; ok {
 			displayTool := t
 			displayTool.Name = inst.Identifier
 			toolsToShow = append(toolsToShow, displayTool)
@@ -51,7 +64,17 @@ func (gui *Gui) renderTools() {
 	for i, tool := range toolsToShow {
 		statusText := "STOPPED"
 		color := gui.Theme.Stopped
-		if gui.OS.CheckToolStatus(tool.CheckCmd) {
+		
+		// For PortBound tools, we might want to check the specific port if available
+		checkCmd := tool.CheckCmd
+		if tool.Kind == config.PortBound && tool.DefaultPort != 0 {
+			// Basic template support if needed, e.g. replacing %d with port
+			if fmt.Sprintf("%d", tool.DefaultPort) != "" {
+				// We don't have complex templating yet, but let's assume the user provided a full cmd
+			}
+		}
+
+		if gui.OS.CheckToolStatus(checkCmd) {
 			statusText = "RUNNING"
 			color = gui.Theme.Running
 		}
@@ -77,7 +100,10 @@ func (gui *Gui) renderTools() {
 }
 
 func (gui *Gui) handleAddTool() {
-	toolNames := commands.GetSupportedToolNames()
+	var toolNames []string
+	for name := range gui.Config.Tools {
+		toolNames = append(toolNames, name)
+	}
 	
 	list := tview.NewList()
 	for _, name := range toolNames {
@@ -116,6 +142,7 @@ func (gui *Gui) handleAddTool() {
 
 	gui.pages.AddPage("addTool", flex, true, true)
 }
+
 
 func (gui *Gui) handleDeleteTool() {
 	idx, _ := gui.tools.GetSelection()
