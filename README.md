@@ -62,13 +62,7 @@ devtool remove postgres --force
 devtool remove postgres --non-interactive
 ```
 
-### `devtool config set-credential`
 
-Store a database password in the native keychain.
-
-```bash
-devtool config set-credential <user>
-```
 
 ## Configuration
 
