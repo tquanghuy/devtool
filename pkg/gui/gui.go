@@ -159,3 +159,17 @@ func (gui *Gui) Run() error {
 func (gui *Gui) Close() {
 	gui.app.Stop()
 }
+
+func (gui *Gui) handleQuit() {
+	modal := tview.NewModal().
+		SetText("Are you sure you want to quit?").
+		AddButtons([]string{"Quit", "Cancel"}).
+		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+			if buttonLabel == "Quit" {
+				gui.app.Stop()
+			}
+			gui.pages.RemovePage("quit")
+		})
+
+	gui.pages.AddPage("quit", modal, true, true)
+}
