@@ -31,6 +31,18 @@ func (gui *Gui) keybindings() error {
 			return nil
 		}
 
+		if event.Rune() == 'i' {
+			gui.showDetails = !gui.showDetails
+			gui.layout()
+			return nil
+		}
+
+		if event.Rune() == 'i' {
+			gui.showDetails = !gui.showDetails
+			gui.layout()
+			return nil
+		}
+
 		return event
 	})
 
@@ -54,4 +66,5 @@ func (gui *Gui) nextView() {
 		gui.conns.SetBorderColor(gui.Theme.BorderUnfocus)
 		gui.resources.SetBorderColor(gui.Theme.BorderUnfocus)
 	}
+	gui.updateDetails()
 }
