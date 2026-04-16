@@ -12,11 +12,18 @@ import (
 	"github.com/gdamore/tcell/v2"
 )
 
+type ConnectionSpec struct {
+	Name string
+	Host string
+	Port int
+}
+
 type State struct {
-	Tools     []config.ToolDefinition
-	Resources []commands.ResourceStat
-	TotalCPU  string
-	TotalMem  string
+	Tools       []config.ToolDefinition
+	Connections []ConnectionSpec
+	Resources   []commands.ResourceStat
+	TotalCPU    string
+	TotalMem    string
 }
 
 type Gui struct {
@@ -25,9 +32,11 @@ type Gui struct {
 	tools     *tview.Table
 	conns     *tview.Table
 	resources *tview.Table
+	details   *tview.TextView
 	status    *tview.TextView
 
-	Log     *logrus.Entry
+	showDetails bool
+	Log         *logrus.Entry
 	Config  *config.AppConfig
 	Managed *config.ManagedConfig
 	OS      *commands.OSCommand
@@ -68,11 +77,13 @@ func NewGui(log *logrus.Entry, cfg *config.AppConfig, managed *config.ManagedCon
 		tools:     tview.NewTable(),
 		conns:     tview.NewTable(),
 		resources: tview.NewTable(),
+		details:   tview.NewTextView(),
 		status:    tview.NewTextView(),
 		Log:       log,
 		Config:    cfg,
 		Managed:   managed,
 		OS:        commands.NewOSCommand(),
+		showDetails: true,
 	}
 
 	gui.Theme = defaultTheme()
@@ -82,15 +93,29 @@ func NewGui(log *logrus.Entry, cfg *config.AppConfig, managed *config.ManagedCon
 	gui.tools.SetBorder(true).
 		SetTitle(" Tools ").
 		SetBorderColor(gui.Theme.BorderFocus)
+	gui.tools.SetSelectionChangedFunc(func(row, column int) {
+		gui.updateDetails()
+	})
 
 	gui.conns.SetSelectable(true, false)
 	gui.conns.SetBorder(true).
 		SetTitle(" Connections ").
 		SetBorderColor(gui.Theme.BorderUnfocus)
+	gui.conns.SetSelectionChangedFunc(func(row, column int) {
+		gui.updateDetails()
+	})
 
 	gui.resources.SetSelectable(true, false)
 	gui.resources.SetBorder(true).
 		SetTitle(" Resource Monitoring ").
+		SetBorderColor(gui.Theme.BorderUnfocus)
+	gui.resources.SetSelectionChangedFunc(func(row, column int) {
+		gui.updateDetails()
+	})
+
+	gui.details.SetDynamicColors(true).
+		SetBorder(true).
+		SetTitle(" Details ").
 		SetBorderColor(gui.Theme.BorderUnfocus)
 
 	gui.status.SetDynamicColors(true).SetBackgroundColor(tcell.ColorBlack)

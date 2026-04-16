@@ -34,6 +34,7 @@ func (gui *Gui) renderConnections() {
 	gui.conns.SetCell(0, 2, headerStatus)
 
 	row := 1
+	var connsToShow []ConnectionSpec
 	
 	// Core Databases
 	dbs := []struct {
@@ -49,6 +50,7 @@ func (gui *Gui) renderConnections() {
 	for _, db := range dbs {
 		status := gui.checkConnection(db.tool, db.host, db.port)
 		gui.addConnectionRow(row, db.name, fmt.Sprintf("%s:%d", db.host, db.port), status)
+		connsToShow = append(connsToShow, ConnectionSpec{Name: db.name, Host: db.host, Port: db.port})
 		row++
 	}
 
@@ -57,9 +59,11 @@ func (gui *Gui) renderConnections() {
 		for name, conn := range gui.Config.Connections {
 			status := gui.checkConnection("", conn.Host, conn.Port)
 			gui.addConnectionRow(row, name, fmt.Sprintf("%s:%d", conn.Host, conn.Port), status)
+			connsToShow = append(connsToShow, ConnectionSpec{Name: name, Host: conn.Host, Port: conn.Port})
 			row++
 		}
 	}
+	gui.State.Connections = connsToShow
 }
 
 func (gui *Gui) addConnectionRow(row int, name, address, status string) {

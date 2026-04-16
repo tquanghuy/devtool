@@ -31,6 +31,4 @@ Users can "Add" a tool to their active workbench. For `singleton` tools, only on
 
 ## Future Roadmap
 
-- **Log Streaming**: Tailing stdout/stderr of managed tools directly in the TUI.
-- **Bulk Actions**: Start/Stop "Stacks" of related tools with one command.
-- **Resource Monitoring**: Real-time CPU/RAM metrics for managed processes.
+For a detailed list of planned features and long-term vision, see the [Feature Roadmap](file:///Users/t.quanghuy/Dev/Code/devtool/docs/roadmap.md).
