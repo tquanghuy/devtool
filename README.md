@@ -41,6 +41,15 @@ tools:
     check_cmd: "curl -s localhost:8080/health"
 ```
 
+## Documentation
+
+More detailed information can be found in the `docs/` directory:
+- [Quickstart Guide](docs/quickstart.md): Get up and running in minutes.
+- [Project Structure](docs/project-structure.md): Deep dive into the codebase and architecture.
+- [Data Model](docs/data-model.md): Specification of configuration and state files.
+- [Roadmap](docs/roadmap.md): Planned features and future directions.
+- [CLI Contract](docs/contracts/cli.md): Commands and flags specification.
+
 ## Storage
 - **Managed Tool Entries**: `~/.devtool/managed.json` tracks which tools you have "added" to your active workbench.
 - **Dynamic State**: Status is checked in real-time using your defined `check_cmd`.

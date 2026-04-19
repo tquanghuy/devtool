@@ -19,11 +19,13 @@ type ConnectionSpec struct {
 }
 
 type State struct {
-	Tools       []config.ToolDefinition
-	Connections []ConnectionSpec
-	Resources   []commands.ResourceStat
-	TotalCPU    string
-	TotalMem    string
+	Tools        []config.ToolDefinition
+	ToolStatuses map[string]string
+	Connections  []ConnectionSpec
+	ConnStatuses map[string]string
+	Resources    []commands.ResourceStat
+	TotalCPU     string
+	TotalMem     string
 }
 
 type Gui struct {
@@ -37,11 +39,10 @@ type Gui struct {
 
 	showDetails bool
 	Log         *logrus.Entry
-	Config  *config.AppConfig
-	Managed *config.ManagedConfig
-	OS      *commands.OSCommand
-	State   State
-	Theme   Theme
+	Config      *config.AppConfig
+	OS          *commands.OSCommand
+	State       State
+	Theme       Theme
 }
 
 type Theme struct {
@@ -68,45 +69,45 @@ func defaultTheme() Theme {
 	}
 }
 
-func NewGui(log *logrus.Entry, cfg *config.AppConfig, managed *config.ManagedConfig) (*Gui, error) {
-	app := tview.NewApplication()
-
+func NewGui(log *logrus.Entry, cfg *config.AppConfig) (*Gui, error) {
 	gui := &Gui{
-		app:       app,
-		pages:     tview.NewPages(),
-		tools:     tview.NewTable(),
-		conns:     tview.NewTable(),
-		resources: tview.NewTable(),
-		details:   tview.NewTextView(),
-		status:    tview.NewTextView(),
-		Log:       log,
-		Config:    cfg,
-		Managed:   managed,
-		OS:        commands.NewOSCommand(),
+		app:         tview.NewApplication(),
+		pages:       tview.NewPages(),
+		tools:       tview.NewTable(),
+		conns:       tview.NewTable(),
+		resources:   tview.NewTable(),
+		details:     tview.NewTextView(),
+		status:      tview.NewTextView(),
+		Log:         log,
+		Config:      cfg,
+		OS:          commands.NewOSCommand(),
 		showDetails: true,
+		Theme:       defaultTheme(),
+		State: State{
+			ToolStatuses: make(map[string]string),
+			ConnStatuses: make(map[string]string),
+		},
 	}
 
-	gui.Theme = defaultTheme()
-
 	// Initialize widgets
-	gui.tools.SetSelectable(true, false)
-	gui.tools.SetBorder(true).
+	gui.tools.SetSelectable(true, false).
+		SetBorder(true).
 		SetTitle(" Tools ").
 		SetBorderColor(gui.Theme.BorderFocus)
 	gui.tools.SetSelectionChangedFunc(func(row, column int) {
 		gui.updateDetails()
 	})
 
-	gui.conns.SetSelectable(true, false)
-	gui.conns.SetBorder(true).
+	gui.conns.SetSelectable(true, false).
+		SetBorder(true).
 		SetTitle(" Connections ").
 		SetBorderColor(gui.Theme.BorderUnfocus)
 	gui.conns.SetSelectionChangedFunc(func(row, column int) {
 		gui.updateDetails()
 	})
 
-	gui.resources.SetSelectable(true, false)
-	gui.resources.SetBorder(true).
+	gui.resources.SetSelectable(true, false).
+		SetBorder(true).
 		SetTitle(" Resource Monitoring ").
 		SetBorderColor(gui.Theme.BorderUnfocus)
 	gui.resources.SetSelectionChangedFunc(func(row, column int) {
@@ -130,7 +131,7 @@ func (gui *Gui) Run() error {
 		return err
 	}
 
-	// Background polling for resources
+	// Background polling for resources and statuses
 	go func() {
 		ticker := time.NewTicker(2 * time.Second)
 		for {
@@ -140,14 +141,36 @@ func (gui *Gui) Run() error {
 				cpu, _ := gui.OS.GetTotalCPUUsage()
 				mem, _ := gui.OS.GetTotalMemUsage()
 
-				// 2. Get Top Processes (Increased limit for scrolling)
+				// 2. Get Top Processes
 				topProcs, _ := gui.OS.GetTopProcesses(100)
+
+				// 3. Poll Tool Statuses
+				toolStatuses := make(map[string]string)
+				for _, tool := range gui.State.Tools {
+					status := "STOPPED"
+					if gui.OS.CheckToolStatus(tool.CheckCmd) {
+						status = "RUNNING"
+					}
+					toolStatuses[tool.Name] = status
+				}
+
+				// 4. Poll Connection Statuses
+				connStatuses := make(map[string]string)
+				for _, conn := range gui.State.Connections {
+					status := gui.checkConnection("", conn.Host, conn.Port)
+					connStatuses[conn.Name] = status
+				}
 
 				gui.app.QueueUpdateDraw(func() {
 					gui.State.TotalCPU = cpu
 					gui.State.TotalMem = mem
 					gui.State.Resources = topProcs
+					gui.State.ToolStatuses = toolStatuses
+					gui.State.ConnStatuses = connStatuses
+					
 					gui.renderResources()
+					gui.renderTools()
+					gui.renderConnections()
 				})
 			}
 		}

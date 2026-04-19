@@ -48,7 +48,10 @@ func (gui *Gui) renderConnections() {
 	}
 
 	for _, db := range dbs {
-		status := gui.checkConnection(db.tool, db.host, db.port)
+		status := "DISCONNECTED"
+		if s, ok := gui.State.ConnStatuses[db.name]; ok {
+			status = s
+		}
 		gui.addConnectionRow(row, db.name, fmt.Sprintf("%s:%d", db.host, db.port), status)
 		connsToShow = append(connsToShow, ConnectionSpec{Name: db.name, Host: db.host, Port: db.port})
 		row++
@@ -57,7 +60,10 @@ func (gui *Gui) renderConnections() {
 	// Custom Connections
 	if len(gui.Config.Connections) > 0 {
 		for name, conn := range gui.Config.Connections {
-			status := gui.checkConnection("", conn.Host, conn.Port)
+			status := "DISCONNECTED"
+			if s, ok := gui.State.ConnStatuses[name]; ok {
+				status = s
+			}
 			gui.addConnectionRow(row, name, fmt.Sprintf("%s:%d", conn.Host, conn.Port), status)
 			connsToShow = append(connsToShow, ConnectionSpec{Name: name, Host: conn.Host, Port: conn.Port})
 			row++

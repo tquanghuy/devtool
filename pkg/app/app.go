@@ -10,7 +10,6 @@ import (
 type App struct {
 	Log     *logrus.Entry
 	Config  *config.AppConfig
-	Managed *config.ManagedConfig
 	Gui     *gui.Gui
 }
 
@@ -31,12 +30,7 @@ func Setup(debug bool) (*App, error) {
 		return nil, err
 	}
 
-	managed, err := config.LoadManagedConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	g, err := gui.NewGui(logger, cfg, managed)
+	g, err := gui.NewGui(logger, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +38,6 @@ func Setup(debug bool) (*App, error) {
 	return &App{
 		Log:     logger,
 		Config:  cfg,
-		Managed: managed,
 		Gui:     g,
 	}, nil
 }

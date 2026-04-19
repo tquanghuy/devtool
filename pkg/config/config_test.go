@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestConfig_CascadingLoad(t *testing.T) {
+func TestConfig_GlobalLoad(t *testing.T) {
 	// 1. Setup temporary home for global config
 	tempHome := t.TempDir()
 	t.Setenv("HOME", tempHome)
@@ -25,7 +25,7 @@ tools:
 	err := os.WriteFile(globalConfigPath, []byte(globalYAML), 0644)
 	require.NoError(t, err)
 
-	// 2. Setup local config in temp project dir
+	// 2. Setup local config in temp project dir (which should be ignored)
 	tempProject := t.TempDir()
 	originalWD, _ := os.Getwd()
 	os.Chdir(tempProject)
@@ -37,26 +37,21 @@ tools:
     name: "local-tool"
     kind: "singleton"
     check_cmd: "echo local"
-  global-tool:
-    name: "overridden-global"
-    kind: "singleton"
-    check_cmd: "echo overridden"
 `
 	err = os.WriteFile(".devtool.yml", []byte(localYAML), 0644)
 	require.NoError(t, err)
 
-	// 3. Load cascaded config
+	// 3. Load config
 	cfg, err := Load()
 	require.NoError(t, err)
 
 	// Verify defaults are present
 	assert.Contains(t, cfg.Tools, "docker")
 	
-	// Verify global tool is present but overridden
+	// Verify global tool is present
 	assert.Contains(t, cfg.Tools, "global-tool")
-	assert.Equal(t, "echo overridden", cfg.Tools["global-tool"].CheckCmd)
+	assert.Equal(t, "echo global", cfg.Tools["global-tool"].CheckCmd)
 	
-	// Verify local-only tool is present
-	assert.Contains(t, cfg.Tools, "local-tool")
-	assert.Equal(t, "echo local", cfg.Tools["local-tool"].CheckCmd)
+	// Verify local-only tool is NOT present (ignored)
+	assert.NotContains(t, cfg.Tools, "local-tool")
 }
