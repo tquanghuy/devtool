@@ -10,8 +10,7 @@ func (gui *Gui) layout() {
 	flex.AddItem(gui.resources, 8, 1, false)
 	
 	content := tview.NewFlex().SetDirection(tview.FlexColumn)
-	content.AddItem(gui.tools, 0, 2, true)
-	content.AddItem(gui.conns, 0, 2, false)
+	content.AddItem(gui.tools, 0, 4, true)
 	
 	if gui.showDetails {
 		content.AddItem(gui.details, 40, 1, false)
@@ -23,7 +22,6 @@ func (gui *Gui) layout() {
 	gui.pages.AddAndSwitchToPage("main", flex, true)
 
 	gui.renderTools()
-	gui.renderConnections()
 	gui.renderResources()
 	gui.renderStatus()
 }

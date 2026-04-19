@@ -14,12 +14,10 @@ func (gui *Gui) updateDetails() {
 	focused := gui.app.GetFocus()
 	if focused == gui.tools {
 		gui.renderDetailsTool()
-	} else if focused == gui.conns {
-		gui.renderDetailsConn()
 	} else if focused == gui.resources {
 		gui.renderDetailsResource()
 	} else {
-		fmt.Fprint(gui.details, "[gray]Select a tool or connection to see details")
+		fmt.Fprint(gui.details, "[gray]Select a tool or resource to see details")
 	}
 }
 
@@ -32,41 +30,23 @@ func (gui *Gui) renderDetailsTool() {
 
 	tool := gui.State.Tools[row-1]
 
-	fmt.Fprintf(gui.details, "[aqua]NAME: [white]%s\n", tool.Name)
-	fmt.Fprintf(gui.details, "[aqua]KIND: [white]%s\n", tool.Kind)
-	fmt.Fprint(gui.details, "\n[yellow]COMMANDS:\n")
-	fmt.Fprintf(gui.details, " [green]Start: [white]%s\n", tool.StartCmd)
-	fmt.Fprintf(gui.details, " [red]Stop:  [white]%s\n", tool.StopCmd)
-	fmt.Fprintf(gui.details, " [blue]Check: [white]%s\n", tool.CheckCmd)
+	fmt.Fprintf(gui.details, "[aqua]IDENTIFIER: [white]%s\n", tool.Instance.Identifier)
+	fmt.Fprintf(gui.details, "[aqua]TOOL TYPE:  [white]%s\n", tool.Instance.ToolName)
+	fmt.Fprintf(gui.details, "[aqua]KIND:       [white]%s\n", tool.Definition.Kind)
 
-	if tool.DefaultPort != 0 {
-		fmt.Fprintf(gui.details, "\n[aqua]DEFAULT PORT: [white]%d\n", tool.DefaultPort)
+	fmt.Fprint(gui.details, "\n[yellow]COMMANDS:\n")
+	fmt.Fprintf(gui.details, " [green]Start: [white]%s\n", gui.OS.FormatCommand(tool.Definition.StartCmd, tool.Instance.Port))
+	fmt.Fprintf(gui.details, " [red]Stop:  [white]%s\n", gui.OS.FormatCommand(tool.Definition.StopCmd, tool.Instance.Port))
+	fmt.Fprintf(gui.details, " [blue]Check: [white]%s\n", gui.OS.FormatCommand(tool.Definition.CheckCmd, tool.Instance.Port))
+
+	if tool.Instance.Port != 0 {
+		fmt.Fprintf(gui.details, "\n[aqua]ASSIGNED PORT: [white]%d\n", tool.Instance.Port)
 	}
 
 	status := "STOPPED"
-	if gui.OS.CheckToolStatus(tool.CheckCmd) {
+	checkCmd := gui.OS.FormatCommand(tool.Definition.CheckCmd, tool.Instance.Port)
+	if gui.OS.CheckToolStatus(checkCmd) {
 		status = "RUNNING"
-	}
-	fmt.Fprintf(gui.details, "\n[aqua]STATUS: [white]%s\n", status)
-}
-
-func (gui *Gui) renderDetailsConn() {
-	row, _ := gui.conns.GetSelection()
-	if row <= 0 || row > len(gui.State.Connections) {
-		fmt.Fprint(gui.details, "[gray]Select a connection to see details")
-		return
-	}
-
-	conn := gui.State.Connections[row-1]
-
-	fmt.Fprintf(gui.details, "[aqua]NAME:    [white]%s\n", conn.Name)
-	fmt.Fprintf(gui.details, "[aqua]ADDRESS: [white]%s:%d\n", conn.Host, conn.Port)
-	fmt.Fprintf(gui.details, "[aqua]HOST:    [white]%s\n", conn.Host)
-	fmt.Fprintf(gui.details, "[aqua]PORT:    [white]%d\n", conn.Port)
-
-	status := "DISCONNECTED"
-	if gui.OS.DialTCP(conn.Host, conn.Port) {
-		status = "CONNECTED"
 	}
 	fmt.Fprintf(gui.details, "\n[aqua]STATUS: [white]%s\n", status)
 }

@@ -39,16 +39,21 @@ type ToolDefinition struct {
 type ManagedInstance struct {
 	ToolName   string    `yaml:"tool_name" json:"tool_name"`
 	Identifier string    `yaml:"identifier" json:"identifier"`
+	Port       int       `yaml:"port" json:"port"`
 	CreatedAt  time.Time `yaml:"created_at" json:"created_at"`
 }
 
 // AppConfig is the top-level configuration for devtool
 type AppConfig struct {
-	Postgres    DatabaseConfig            `yaml:"postgres" json:"postgres"`
-	MySQL       DatabaseConfig            `yaml:"mysql" json:"mysql"`
-	Connections map[string]DatabaseConfig `yaml:"connections" json:"connections"`
-	Tools       map[string]ToolDefinition `yaml:"tools" json:"tools"`
-	Managed     []ManagedInstance         `yaml:"managed" json:"managed"`
+	PostgresConns map[string]DatabaseConfig `yaml:"postgres_conns" json:"postgres_conns"`
+	MySQLConns    map[string]DatabaseConfig `yaml:"mysql_conns" json:"mysql_conns"`
+	Tools         map[string]ToolDefinition `yaml:"tools" json:"tools"`
+	Managed       []ManagedInstance         `yaml:"managed" json:"managed"`
+
+	// Deprecated fields kept for migration
+	Postgres    *DatabaseConfig            `yaml:"postgres,omitempty" json:"postgres,omitempty"`
+	MySQL       *DatabaseConfig            `yaml:"mysql,omitempty" json:"mysql,omitempty"`
+	Connections map[string]DatabaseConfig `yaml:"connections,omitempty" json:"connections,omitempty"`
 }
 
 const (
@@ -67,11 +72,10 @@ func GetConfigPath() (string, error) {
 // Load reads the application configuration by merging defaults and global config.
 func Load() (*AppConfig, error) {
 	cfg := &AppConfig{
-		Postgres:    DatabaseConfig{Host: "localhost", Port: 5432, User: "postgres", Database: "postgres"},
-		MySQL:       DatabaseConfig{Host: "localhost", Port: 3306, User: "root", Database: "mysql"},
-		Connections: make(map[string]DatabaseConfig),
-		Tools:       GetDefaultTools(),
-		Managed:     []ManagedInstance{},
+		PostgresConns: make(map[string]DatabaseConfig),
+		MySQLConns:    make(map[string]DatabaseConfig),
+		Tools:         GetDefaultTools(),
+		Managed:       []ManagedInstance{},
 	}
 
 	// 1. Load Global Config
@@ -85,10 +89,45 @@ func Load() (*AppConfig, error) {
 		}
 	}
 
-	// 2. Migration Check: if Managed is empty, try migrating from managed.json
+	// 2. Migration
+	migrated := false
+	if cfg.Postgres != nil {
+		if _, ok := cfg.PostgresConns["default"]; !ok {
+			cfg.PostgresConns["default"] = *cfg.Postgres
+		}
+		cfg.Postgres = nil
+		migrated = true
+	}
+	if cfg.MySQL != nil {
+		if _, ok := cfg.MySQLConns["default"]; !ok {
+			cfg.MySQLConns["default"] = *cfg.MySQL
+		}
+		cfg.MySQL = nil
+		migrated = true
+	}
+	if len(cfg.Connections) > 0 {
+		for name, conn := range cfg.Connections {
+			if conn.Port == 5432 {
+				cfg.PostgresConns[name] = conn
+			} else if conn.Port == 3306 {
+				cfg.MySQLConns[name] = conn
+			} else {
+				// Default to postgres if unsure
+				cfg.PostgresConns[name] = conn
+			}
+		}
+		cfg.Connections = nil
+		migrated = true
+	}
+
+	if migrated {
+		_ = Save(cfg)
+	}
+
+	// 3. Migration Check: if Managed is empty, try migrating from managed.json
 	if len(cfg.Managed) == 0 {
-		if migrated, err := migrateManagedConfig(); err == nil && len(migrated) > 0 {
-			cfg.Managed = migrated
+		if m, err := migrateManagedConfig(); err == nil && len(m) > 0 {
+			cfg.Managed = m
 			// Save immediately to persist migration
 			_ = Save(cfg)
 		}
@@ -98,15 +137,35 @@ func Load() (*AppConfig, error) {
 }
 
 func mergeConfigs(base, override *AppConfig) {
-	if override.Postgres.Host != "" {
+	if base.PostgresConns == nil {
+		base.PostgresConns = make(map[string]DatabaseConfig)
+	}
+	for k, v := range override.PostgresConns {
+		base.PostgresConns[k] = v
+	}
+
+	if base.MySQLConns == nil {
+		base.MySQLConns = make(map[string]DatabaseConfig)
+	}
+	for k, v := range override.MySQLConns {
+		base.MySQLConns[k] = v
+	}
+
+	if override.Postgres != nil {
 		base.Postgres = override.Postgres
 	}
-	if override.MySQL.Host != "" {
+	if override.MySQL != nil {
 		base.MySQL = override.MySQL
 	}
-	for k, v := range override.Connections {
-		base.Connections[k] = v
+	if override.Connections != nil {
+		if base.Connections == nil {
+			base.Connections = make(map[string]DatabaseConfig)
+		}
+		for k, v := range override.Connections {
+			base.Connections[k] = v
+		}
 	}
+
 	if override.Tools != nil {
 		for k, v := range override.Tools {
 			base.Tools[k] = v
