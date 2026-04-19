@@ -10,7 +10,7 @@ This document outlines the planned features and long-term vision for `devtool`. 
 - [ ] **Metric Sparklines**: inline ~60s sparklines of CPU/RAM/latency per tool in the Tools table. *(new)*
 - [ ] **Health-check Latency Budget**: mark a tool "degraded" (amber) when `check_cmd` exceeds a threshold. *(new)*
 - [ ] **Structured Event Log**: in-memory circular event log for start/stop/check results, via a `:events` panel. *(new)*
-- [ ] **Async Status Polling**: move per-tool status checks off the render path into goroutines. *(new)*
+- [x] **Async Status Polling**: move per-tool status checks off the render path into goroutines. *(new)*
 
 ## 2. Orchestration & Stacks
 - [ ] **Tool Dependencies**: Support for `depends_on` in tool definitions (e.g., API requires Postgres).
@@ -89,7 +89,7 @@ This document outlines the planned features and long-term vision for `devtool`. 
 
 This checklist tracks the implementation progress of new items, sorted by prioritization (Impact × Effort).
 
-- [ ] **#01: Async Status Polling** (Section 1) • Impact: L • Effort: S
+- [x] **#01: Async Status Polling** (Section 1) • Impact: L • Effort: S
 - [ ] **#02: Just-in-time Port Allocator** (Section 6) • Impact: L • Effort: S (Deps: Identifier bug fix)
 - [ ] **#03: Log Follow + Filter** (Section 6) • Impact: L • Effort: M (Deps: Async polling)
 - [ ] **#04: Docker Compose Import** (Section 4) • Impact: L • Effort: M

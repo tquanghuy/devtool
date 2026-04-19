@@ -2,6 +2,7 @@ package gui
 
 import (
 	"fmt"
+	"time"
 	"github.com/rivo/tview"
 	"github.com/gdamore/tcell/v2"
 	"devtool/pkg/config"
@@ -39,7 +40,7 @@ func (gui *Gui) renderTools() {
 	}
 
 	// Add managed instances
-	for _, inst := range gui.Managed.Instances {
+	for _, inst := range gui.Config.Managed {
 		// Avoid double-adding core singletons
 		isCore := false
 		for _, ct := range coreTools {
@@ -66,17 +67,13 @@ func (gui *Gui) renderTools() {
 		color := gui.Theme.Stopped
 		
 		// For PortBound tools, we might want to check the specific port if available
-		checkCmd := tool.CheckCmd
-		if tool.Kind == config.PortBound && tool.DefaultPort != 0 {
-			// Basic template support if needed, e.g. replacing %d with port
-			if fmt.Sprintf("%d", tool.DefaultPort) != "" {
-				// We don't have complex templating yet, but let's assume the user provided a full cmd
-			}
-		}
+		// Status is now handled by background polling loop
 
-		if gui.OS.CheckToolStatus(checkCmd) {
-			statusText = "RUNNING"
-			color = gui.Theme.Running
+		if status, ok := gui.State.ToolStatuses[tool.Name]; ok {
+			statusText = status
+			if status == "RUNNING" {
+				color = gui.Theme.Running
+			}
 		}
 		
 		nameCell := tview.NewTableCell(" " + tool.Name).
@@ -112,14 +109,26 @@ func (gui *Gui) handleAddTool() {
 	
 	list.SetSelectedFunc(func(index int, mainText string, secondaryText string, shortcut rune) {
 		toolName := mainText
-		err := gui.Managed.AddInstance(&config.ManagedInstance{
-			ToolName:   toolName,
-			Identifier: toolName,
-		})
-		if err == nil {
-			config.SaveManagedConfig(gui.Managed)
+		
+		// Check for duplicates
+		exists := false
+		for _, inst := range gui.Config.Managed {
+			if inst.Identifier == toolName {
+				exists = true
+				break
+			}
+		}
+		
+		if !exists {
+			gui.Config.Managed = append(gui.Config.Managed, config.ManagedInstance{
+				ToolName:   toolName,
+				Identifier: toolName,
+				CreatedAt:  time.Now(),
+			})
+			_ = config.Save(gui.Config)
 			gui.renderTools()
 		}
+		
 		gui.pages.RemovePage("addTool")
 		gui.app.SetFocus(gui.tools)
 	})
@@ -156,9 +165,14 @@ func (gui *Gui) handleDeleteTool() {
 		AddButtons([]string{"Delete", "Cancel"}).
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
 			if buttonLabel == "Delete" {
-				gui.Managed.RemoveInstance(tool.Name)
-				config.SaveManagedConfig(gui.Managed)
-				gui.renderTools()
+				for i, inst := range gui.Config.Managed {
+					if inst.Identifier == tool.Name {
+						gui.Config.Managed = append(gui.Config.Managed[:i], gui.Config.Managed[i+1:]...)
+						_ = config.Save(gui.Config)
+						gui.renderTools()
+						break
+					}
+				}
 			}
 			gui.pages.RemovePage("deleteTool")
 			gui.app.SetFocus(gui.tools)

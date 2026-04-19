@@ -12,8 +12,8 @@ To serve as the "Single Point of Truth" for local developer tool lifecycles, usi
   - Minimal CLI: The CLI primarily serves as an entry point for the TUI.
 - **Dependencies**: Uses `tview` and `tcell` for the TUI, `logrus` for logging, and `yaml.v3` for configuration.
 - **Config Storage**: 
-  - **Cascading Config**: Merges defaults, `~/.devtool.yml` (Global), and `./.devtool.yml` (Local).
-  - **Managed State**: `~/.devtool/managed.json` tracks user-selected tool instances.
+  - **Global Config Only**: Uses `~/.devtool.yml` for all tool definitions and settings. Local `.devtool.yml` files are ignored to ensure a single, consistent source of truth.
+  - **Integrated State**: Managed tool instances (selected by the user) are stored within the `managed` section of `~/.devtool.yml`.
 
 ## AI Agent Guidelines
 - **Configuration over Hardcoding**: Never hardcode new tools. Add them to `pkg/config/defaults.go` if they are core, or document how users can add them to their YAML configs.

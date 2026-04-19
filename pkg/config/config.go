@@ -1,9 +1,11 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -33,14 +35,21 @@ type ToolDefinition struct {
 	StopCmd     string   `yaml:"stop_cmd" json:"stop_cmd"`
 }
 
+// ManagedInstance represents a single installation/registration of a tool.
+type ManagedInstance struct {
+	ToolName   string    `yaml:"tool_name" json:"tool_name"`
+	Identifier string    `yaml:"identifier" json:"identifier"`
+	CreatedAt  time.Time `yaml:"created_at" json:"created_at"`
+}
+
 // AppConfig is the top-level configuration for devtool
 type AppConfig struct {
 	Postgres    DatabaseConfig            `yaml:"postgres" json:"postgres"`
 	MySQL       DatabaseConfig            `yaml:"mysql" json:"mysql"`
 	Connections map[string]DatabaseConfig `yaml:"connections" json:"connections"`
 	Tools       map[string]ToolDefinition `yaml:"tools" json:"tools"`
+	Managed     []ManagedInstance         `yaml:"managed" json:"managed"`
 }
-
 
 const (
 	configFileName = ".devtool.yml"
@@ -55,19 +64,14 @@ func GetConfigPath() (string, error) {
 	return filepath.Join(home, configFileName), nil
 }
 
-// GetLocalConfigPath returns the path to a .devtool.yml in the current directory.
-func GetLocalConfigPath() string {
-	return configFileName
-}
-
-
-// Load reads the application configuration by merging defaults, global config, and local config.
+// Load reads the application configuration by merging defaults and global config.
 func Load() (*AppConfig, error) {
 	cfg := &AppConfig{
 		Postgres:    DatabaseConfig{Host: "localhost", Port: 5432, User: "postgres", Database: "postgres"},
 		MySQL:       DatabaseConfig{Host: "localhost", Port: 3306, User: "root", Database: "mysql"},
 		Connections: make(map[string]DatabaseConfig),
 		Tools:       GetDefaultTools(),
+		Managed:     []ManagedInstance{},
 	}
 
 	// 1. Load Global Config
@@ -81,12 +85,12 @@ func Load() (*AppConfig, error) {
 		}
 	}
 
-	// 2. Load Local Config
-	localPath := GetLocalConfigPath()
-	if data, err := os.ReadFile(localPath); err == nil {
-		var localCfg AppConfig
-		if err := yaml.Unmarshal(data, &localCfg); err == nil {
-			mergeConfigs(cfg, &localCfg)
+	// 2. Migration Check: if Managed is empty, try migrating from managed.json
+	if len(cfg.Managed) == 0 {
+		if migrated, err := migrateManagedConfig(); err == nil && len(migrated) > 0 {
+			cfg.Managed = migrated
+			// Save immediately to persist migration
+			_ = Save(cfg)
 		}
 	}
 
@@ -108,6 +112,31 @@ func mergeConfigs(base, override *AppConfig) {
 			base.Tools[k] = v
 		}
 	}
+	if len(override.Managed) > 0 {
+		base.Managed = override.Managed
+	}
+}
+
+func migrateManagedConfig() ([]ManagedInstance, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	path := filepath.Join(home, ".devtool", "managed.json")
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var oldCfg struct {
+		Instances []ManagedInstance `json:"instances"`
+	}
+	if err := json.Unmarshal(data, &oldCfg); err != nil {
+		return nil, err
+	}
+
+	return oldCfg.Instances, nil
 }
 
 
