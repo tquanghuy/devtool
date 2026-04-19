@@ -54,19 +54,12 @@ func (gui *Gui) keybindings() error {
 
 func (gui *Gui) nextView() {
 	if gui.app.GetFocus() == gui.tools {
-		gui.app.SetFocus(gui.conns)
-		gui.tools.SetBorderColor(gui.Theme.BorderUnfocus)
-		gui.conns.SetBorderColor(gui.Theme.BorderFocus)
-		gui.resources.SetBorderColor(gui.Theme.BorderUnfocus)
-	} else if gui.app.GetFocus() == gui.conns {
 		gui.app.SetFocus(gui.resources)
 		gui.tools.SetBorderColor(gui.Theme.BorderUnfocus)
-		gui.conns.SetBorderColor(gui.Theme.BorderUnfocus)
 		gui.resources.SetBorderColor(gui.Theme.BorderFocus)
 	} else {
 		gui.app.SetFocus(gui.tools)
 		gui.tools.SetBorderColor(gui.Theme.BorderFocus)
-		gui.conns.SetBorderColor(gui.Theme.BorderUnfocus)
 		gui.resources.SetBorderColor(gui.Theme.BorderUnfocus)
 	}
 	gui.updateDetails()

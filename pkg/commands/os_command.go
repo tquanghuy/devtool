@@ -206,3 +206,28 @@ func (c *OSCommand) GetProcessStats(processName string) (*ResourceStat, error) {
 		MEM:  fmt.Sprintf("%.1f%%", totalMEM),
 	}, nil
 }
+
+// GetFreePort finds the next available port starting from startPort
+func (c *OSCommand) GetFreePort(startPort int) int {
+	port := startPort
+	for {
+		address := fmt.Sprintf(":%d", port)
+		l, err := net.Listen("tcp", address)
+		if err == nil {
+			l.Close()
+			return port
+		}
+		port++
+		if port > 65535 {
+			return 0 // Failed to find a port
+		}
+	}
+}
+
+// FormatCommand replaces %d placeholders with the actual port
+func (c *OSCommand) FormatCommand(cmd string, port int) string {
+	if !strings.Contains(cmd, "%d") {
+		return cmd
+	}
+	return fmt.Sprintf(cmd, port)
+}

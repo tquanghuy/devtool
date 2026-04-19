@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/rivo/tview"
@@ -18,8 +19,13 @@ type ConnectionSpec struct {
 	Port int
 }
 
+type ToolInstance struct {
+	Definition config.ToolDefinition
+	Instance   config.ManagedInstance
+}
+
 type State struct {
-	Tools        []config.ToolDefinition
+	Tools        []ToolInstance
 	ToolStatuses map[string]string
 	Connections  []ConnectionSpec
 	ConnStatuses map[string]string
@@ -32,7 +38,6 @@ type Gui struct {
 	app       *tview.Application
 	pages     *tview.Pages
 	tools     *tview.Table
-	conns     *tview.Table
 	resources *tview.Table
 	details   *tview.TextView
 	status    *tview.TextView
@@ -74,7 +79,6 @@ func NewGui(log *logrus.Entry, cfg *config.AppConfig) (*Gui, error) {
 		app:         tview.NewApplication(),
 		pages:       tview.NewPages(),
 		tools:       tview.NewTable(),
-		conns:       tview.NewTable(),
 		resources:   tview.NewTable(),
 		details:     tview.NewTextView(),
 		status:      tview.NewTextView(),
@@ -95,14 +99,6 @@ func NewGui(log *logrus.Entry, cfg *config.AppConfig) (*Gui, error) {
 		SetTitle(" Tools ").
 		SetBorderColor(gui.Theme.BorderFocus)
 	gui.tools.SetSelectionChangedFunc(func(row, column int) {
-		gui.updateDetails()
-	})
-
-	gui.conns.SetSelectable(true, false).
-		SetBorder(true).
-		SetTitle(" Connections ").
-		SetBorderColor(gui.Theme.BorderUnfocus)
-	gui.conns.SetSelectionChangedFunc(func(row, column int) {
 		gui.updateDetails()
 	})
 
@@ -148,15 +144,24 @@ func (gui *Gui) Run() error {
 				toolStatuses := make(map[string]string)
 				for _, tool := range gui.State.Tools {
 					status := "STOPPED"
-					if gui.OS.CheckToolStatus(tool.CheckCmd) {
+					checkCmd := gui.OS.FormatCommand(tool.Definition.CheckCmd, tool.Instance.Port)
+					if gui.OS.CheckToolStatus(checkCmd) {
 						status = "RUNNING"
 					}
-					toolStatuses[tool.Name] = status
+					toolStatuses[tool.Instance.Identifier] = status
 				}
 
-				// 4. Poll Connection Statuses
+				// 4. Poll Connection Statuses (all)
 				connStatuses := make(map[string]string)
-				for _, conn := range gui.State.Connections {
+				allConns := []ConnectionSpec{}
+				for name, conn := range gui.Config.PostgresConns {
+					allConns = append(allConns, ConnectionSpec{Name: name, Host: conn.Host, Port: conn.Port})
+				}
+				for name, conn := range gui.Config.MySQLConns {
+					allConns = append(allConns, ConnectionSpec{Name: name, Host: conn.Host, Port: conn.Port})
+				}
+
+				for _, conn := range allConns {
 					status := gui.checkConnection("", conn.Host, conn.Port)
 					connStatuses[conn.Name] = status
 				}
@@ -167,10 +172,10 @@ func (gui *Gui) Run() error {
 					gui.State.Resources = topProcs
 					gui.State.ToolStatuses = toolStatuses
 					gui.State.ConnStatuses = connStatuses
+					gui.State.Connections = allConns
 					
 					gui.renderResources()
 					gui.renderTools()
-					gui.renderConnections()
 				})
 			}
 		}
@@ -195,4 +200,22 @@ func (gui *Gui) handleQuit() {
 		})
 
 	gui.pages.AddPage("quit", modal, true, true)
+}
+
+func (gui *Gui) checkConnection(toolName string, host string, port int) string {
+	if toolName != "" {
+		if t, ok := config.GetDefaultTools()[toolName]; ok {
+			checkCmd := fmt.Sprintf(t.CheckCmd, port)
+			if gui.OS.CheckToolStatus(checkCmd) {
+				return "CONNECTED"
+			}
+		}
+	}
+	
+	// Fallback to TCP dial
+	if gui.OS.DialTCP(host, port) {
+		return "CONNECTED"
+	}
+	
+	return "DISCONNECTED"
 }
