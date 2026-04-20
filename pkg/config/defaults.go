@@ -4,21 +4,18 @@ func GetDefaultTools() map[string]ToolDefinition {
 	return map[string]ToolDefinition{
 		"docker": {
 			Name:     "docker",
-			Kind:     Singleton,
 			CheckCmd: "docker info >/dev/null 2>&1",
 			StartCmd: "open -a Docker",
 			StopCmd:  "osascript -e 'quit app \"Docker\"'",
 		},
 		"telepresence": {
 			Name:     "telepresence",
-			Kind:     Singleton,
 			CheckCmd: "telepresence status >/dev/null 2>&1",
 			StartCmd: "telepresence connect",
 			StopCmd:  "telepresence quit",
 		},
 		"postgres": {
 			Name:        "postgres",
-			Kind:        PortBound,
 			DefaultPort: 5432,
 			CheckCmd:    "pg_isready -h localhost -p %d",
 			StartCmd:    "brew services start postgresql",
@@ -26,7 +23,6 @@ func GetDefaultTools() map[string]ToolDefinition {
 		},
 		"mysql": {
 			Name:        "mysql",
-			Kind:        PortBound,
 			DefaultPort: 3306,
 			CheckCmd:    "mysqladmin -h localhost -P %d ping",
 			StartCmd:    "brew services start mysql",
@@ -34,13 +30,11 @@ func GetDefaultTools() map[string]ToolDefinition {
 		},
 		"gcloud": {
 			Name:     "gcloud",
-			Kind:     Singleton,
 			CheckCmd: "gcloud auth list --filter=status:ACTIVE --format='value(account)' | grep -q .",
 			StartCmd: "gcloud auth login",
 		},
 		"cloud-sql-proxy": {
 			Name:        "cloud-sql-proxy",
-			Kind:        PortBound,
 			DefaultPort: 5432,
 			CheckCmd:    "lsof -i :%d >/dev/null 2>&1",
 			StartCmd:    "cloud-sql-proxy --port %d [INSTANCE_CONNECTION_NAME]",
@@ -48,7 +42,6 @@ func GetDefaultTools() map[string]ToolDefinition {
 		},
 		"pubsub-emulator": {
 			Name:        "pubsub-emulator",
-			Kind:        PortBound,
 			DefaultPort: 8085,
 			CheckCmd:    "curl -s localhost:%d >/dev/null 2>&1",
 			StartCmd:    "gcloud beta emulators pubsub start --host-port=0.0.0.0:%d",
@@ -56,7 +49,6 @@ func GetDefaultTools() map[string]ToolDefinition {
 		},
 		"firebase-emulator": {
 			Name:        "firebase-emulator",
-			Kind:        PortBound,
 			DefaultPort: 4000,
 			CheckCmd:    "curl -s localhost:%d >/dev/null 2>&1",
 			StartCmd:    "firebase emulators:start",

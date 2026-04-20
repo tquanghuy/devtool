@@ -32,7 +32,6 @@ func (gui *Gui) renderDetailsTool() {
 
 	fmt.Fprintf(gui.details, "[aqua]IDENTIFIER: [white]%s\n", tool.Instance.Identifier)
 	fmt.Fprintf(gui.details, "[aqua]TOOL TYPE:  [white]%s\n", tool.Instance.ToolName)
-	fmt.Fprintf(gui.details, "[aqua]KIND:       [white]%s\n", tool.Definition.Kind)
 
 	fmt.Fprint(gui.details, "\n[yellow]COMMANDS:\n")
 	fmt.Fprintf(gui.details, " [green]Start: [white]%s\n", gui.OS.FormatCommand(tool.Definition.StartCmd, tool.Instance.Port))
@@ -44,9 +43,8 @@ func (gui *Gui) renderDetailsTool() {
 	}
 
 	status := "STOPPED"
-	checkCmd := gui.OS.FormatCommand(tool.Definition.CheckCmd, tool.Instance.Port)
-	if gui.OS.CheckToolStatus(checkCmd) {
-		status = "RUNNING"
+	if s, ok := gui.State.ToolStatuses[tool.Instance.Identifier]; ok {
+		status = s
 	}
 	fmt.Fprintf(gui.details, "\n[aqua]STATUS: [white]%s\n", status)
 }

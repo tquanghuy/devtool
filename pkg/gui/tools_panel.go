@@ -31,9 +31,9 @@ func (gui *Gui) renderTools() {
 
 	var toolsToShow []ToolInstance
 	
-	// Add core singletons from config if they are managed or should always be shown
-	coreTools := []string{"docker", "telepresence", "postgres", "mysql"}
-	for _, name := range coreTools {
+	// Add core DB managers (always shown for now, though they don't have instances in 'Managed' usually)
+	dbManagers := []string{"postgres", "mysql"}
+	for _, name := range dbManagers {
 		if t, ok := gui.Config.Tools[name]; ok {
 			toolsToShow = append(toolsToShow, ToolInstance{
 				Definition: t,
@@ -48,15 +48,15 @@ func (gui *Gui) renderTools() {
 
 	// Add managed instances
 	for _, inst := range gui.Config.Managed {
-		// Avoid double-adding core singletons
-		isCore := false
-		for _, ct := range coreTools {
-			if inst.ToolName == ct {
-				isCore = true
+		// Avoid double-adding if it's already in toolsToShow (e.g. if we somehow managed a DB tool)
+		exists := false
+		for _, ts := range toolsToShow {
+			if ts.Instance.Identifier == inst.Identifier {
+				exists = true
 				break
 			}
 		}
-		if isCore {
+		if exists {
 			continue
 		}
 
@@ -155,26 +155,56 @@ func (gui *Gui) handleAddTool() {
 }
 
 func (gui *Gui) showAddToolForm(toolName string, def config.ToolDefinition) {
-	identifier := toolName
 	port := def.DefaultPort
-	
-	if def.Kind == config.PortBound {
+	if port > 0 {
 		port = gui.OS.GetFreePort(def.DefaultPort)
+	}
+
+	// Dynamic unique identifier generation
+	identifier := toolName
+	if port > 0 {
 		identifier = fmt.Sprintf("%s:%d", toolName, port)
 	}
 
+	// Collision loop for identifier
+	baseIdentifier := identifier
+	counter := 1
+	for {
+		exists := false
+		for _, inst := range gui.Config.Managed {
+			if inst.Identifier == identifier {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			break
+		}
+		// If collision, add/increment suffix
+		identifier = fmt.Sprintf("%s-%d", baseIdentifier, counter)
+		counter++
+	}
+
 	form := tview.NewForm()
-	form.AddInputField("Identifier", identifier, 30, nil, func(text string) {
+	form.AddInputField("Identifier", identifier, 40, nil, func(text string) {
 		identifier = text
 	})
 	
-	if def.Kind == config.PortBound {
+	if def.DefaultPort > 0 {
 		form.AddInputField("Port", fmt.Sprintf("%d", port), 10, nil, func(text string) {
 			fmt.Sscanf(text, "%d", &port)
 		})
 	}
 
 	form.AddButton("Add", func() {
+		// Final uniqueness check before saving
+		for _, inst := range gui.Config.Managed {
+			if inst.Identifier == identifier {
+				// TODO: Show a toast error instead of just returning
+				return 
+			}
+		}
+
 		gui.Config.Managed = append(gui.Config.Managed, config.ManagedInstance{
 			ToolName:   toolName,
 			Identifier: identifier,
@@ -254,25 +284,78 @@ func (gui *Gui) handleToolEnter() {
 
 	modal := tview.NewModal().
 		SetText(fmt.Sprintf("Actions for %s", tool.Instance.Identifier)).
-		AddButtons([]string{"Reconnect", "Disconnect", "Cancel"}).
+		AddButtons([]string{"Start/Restart", "Stop", "Cancel"}).
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-			var err error
+			gui.pages.RemovePage("toolActions")
+			
 			switch buttonIndex {
-			case 0: // Reconnect
-				formattedCmd := gui.OS.FormatCommand(tool.Definition.StartCmd, tool.Instance.Port)
-				_, err = gui.OS.RunCommand(formattedCmd)
-			case 1: // Disconnect
+			case 0: // Start/Restart
+				gui.startToolWithJIT(tool)
+			case 1: // Stop
 				formattedCmd := gui.OS.FormatCommand(tool.Definition.StopCmd, tool.Instance.Port)
-				_, err = gui.OS.RunCommand(formattedCmd)
-			}
-			if err == nil {
+				_, _ = gui.OS.RunCommand(formattedCmd)
 				gui.renderTools()
 			}
-			gui.pages.RemovePage("toolActions")
 			gui.app.SetFocus(gui.tools)
 		})
 
 	gui.pages.AddPage("toolActions", modal, true, true)
+}
+
+func (gui *Gui) startToolWithJIT(tool ToolInstance) {
+	if tool.Instance.Port > 0 && gui.OS.IsPortBusy(tool.Instance.Port) {
+		// Check if it's already running (our own checkCmd)
+		checkCmd := gui.OS.FormatCommand(tool.Definition.CheckCmd, tool.Instance.Port)
+		if gui.OS.CheckToolStatus(checkCmd) {
+			// Already running, just restart?
+			formattedCmd := gui.OS.FormatCommand(tool.Definition.StartCmd, tool.Instance.Port)
+			_, _ = gui.OS.RunCommand(formattedCmd)
+			gui.renderTools()
+			return
+		}
+
+		// It's busy but not by us (or check command failed)
+		gui.showPortBusyModal(tool)
+		return
+	}
+
+	// Normal start
+	formattedCmd := gui.OS.FormatCommand(tool.Definition.StartCmd, tool.Instance.Port)
+	_, _ = gui.OS.RunCommand(formattedCmd)
+	gui.renderTools()
+}
+
+func (gui *Gui) showPortBusyModal(tool ToolInstance) {
+	modal := tview.NewModal().
+		SetText(fmt.Sprintf("Port %d is already in use by another process.\nWould you like to allocate a new free port?", tool.Instance.Port)).
+		AddButtons([]string{"Re-allocate Port", "Cancel"}).
+		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+			if buttonLabel == "Re-allocate Port" {
+				newPort := gui.OS.GetFreePort(tool.Instance.Port + 1)
+				if newPort > 0 {
+					// Update Managed Instance in config
+					for i, inst := range gui.Config.Managed {
+						if inst.Identifier == tool.Instance.Identifier {
+							gui.Config.Managed[i].Port = newPort
+							// Also update identifier if it was tool:port
+							if inst.Identifier == fmt.Sprintf("%s:%d", inst.ToolName, inst.Port) {
+								gui.Config.Managed[i].Identifier = fmt.Sprintf("%s:%d", inst.ToolName, newPort)
+							}
+							break
+						}
+					}
+					_ = config.Save(gui.Config)
+					
+					// Restart with new port
+					tool.Instance.Port = newPort // Local update for immediate use
+					gui.startToolWithJIT(tool)
+				}
+			}
+			gui.pages.RemovePage("portBusy")
+			gui.app.SetFocus(gui.tools)
+		})
+
+	gui.pages.AddPage("portBusy", modal, true, true)
 }
 
 func (gui *Gui) showDatabaseConnections(dbType string) {
