@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,17 +17,9 @@ type DatabaseConfig struct {
 	Database string `yaml:"database" json:"database"`
 }
 
-type ToolKind string
-
-const (
-	Singleton ToolKind = "singleton"
-	PortBound ToolKind = "portbound"
-)
-
 // ToolDefinition represents a managed developer tool's configuration and operations.
 type ToolDefinition struct {
 	Name        string   `yaml:"name" json:"name"`
-	Kind        ToolKind `yaml:"kind" json:"kind"`
 	DefaultPort int      `yaml:"default_port" json:"default_port"`
 	CheckCmd    string   `yaml:"check_cmd" json:"check_cmd"`
 	StartCmd    string   `yaml:"start_cmd" json:"start_cmd"`
@@ -49,11 +40,6 @@ type AppConfig struct {
 	MySQLConns    map[string]DatabaseConfig `yaml:"mysql_conns" json:"mysql_conns"`
 	Tools         map[string]ToolDefinition `yaml:"tools" json:"tools"`
 	Managed       []ManagedInstance         `yaml:"managed" json:"managed"`
-
-	// Deprecated fields kept for migration
-	Postgres    *DatabaseConfig            `yaml:"postgres,omitempty" json:"postgres,omitempty"`
-	MySQL       *DatabaseConfig            `yaml:"mysql,omitempty" json:"mysql,omitempty"`
-	Connections map[string]DatabaseConfig `yaml:"connections,omitempty" json:"connections,omitempty"`
 }
 
 const (
@@ -89,51 +75,41 @@ func Load() (*AppConfig, error) {
 		}
 	}
 
-	// 2. Migration
-	migrated := false
-	if cfg.Postgres != nil {
-		if _, ok := cfg.PostgresConns["default"]; !ok {
-			cfg.PostgresConns["default"] = *cfg.Postgres
-		}
-		cfg.Postgres = nil
-		migrated = true
-	}
-	if cfg.MySQL != nil {
-		if _, ok := cfg.MySQLConns["default"]; !ok {
-			cfg.MySQLConns["default"] = *cfg.MySQL
-		}
-		cfg.MySQL = nil
-		migrated = true
-	}
-	if len(cfg.Connections) > 0 {
-		for name, conn := range cfg.Connections {
-			if conn.Port == 5432 {
-				cfg.PostgresConns[name] = conn
-			} else if conn.Port == 3306 {
-				cfg.MySQLConns[name] = conn
-			} else {
-				// Default to postgres if unsure
-				cfg.PostgresConns[name] = conn
-			}
-		}
-		cfg.Connections = nil
-		migrated = true
-	}
-
-	if migrated {
-		_ = Save(cfg)
-	}
-
-	// 3. Migration Check: if Managed is empty, try migrating from managed.json
-	if len(cfg.Managed) == 0 {
-		if m, err := migrateManagedConfig(); err == nil && len(m) > 0 {
-			cfg.Managed = m
-			// Save immediately to persist migration
-			_ = Save(cfg)
-		}
-	}
+	// 2. Ensure core tools are in Managed list (migration)
+	cfg.ensureDefaults()
 
 	return cfg, nil
+}
+
+func (cfg *AppConfig) ensureDefaults() {
+	coreInitial := []string{"docker", "telepresence"}
+	modified := false
+
+	for _, name := range coreInitial {
+		exists := false
+		for _, inst := range cfg.Managed {
+			if inst.ToolName == name {
+				exists = true
+				break
+			}
+		}
+
+		if !exists {
+			if def, ok := cfg.Tools[name]; ok {
+				cfg.Managed = append(cfg.Managed, ManagedInstance{
+					ToolName:   name,
+					Identifier: name,
+					Port:       def.DefaultPort,
+					CreatedAt:  time.Now(),
+				})
+				modified = true
+			}
+		}
+	}
+
+	if modified {
+		_ = Save(cfg)
+	}
 }
 
 func mergeConfigs(base, override *AppConfig) {
@@ -151,21 +127,6 @@ func mergeConfigs(base, override *AppConfig) {
 		base.MySQLConns[k] = v
 	}
 
-	if override.Postgres != nil {
-		base.Postgres = override.Postgres
-	}
-	if override.MySQL != nil {
-		base.MySQL = override.MySQL
-	}
-	if override.Connections != nil {
-		if base.Connections == nil {
-			base.Connections = make(map[string]DatabaseConfig)
-		}
-		for k, v := range override.Connections {
-			base.Connections[k] = v
-		}
-	}
-
 	if override.Tools != nil {
 		for k, v := range override.Tools {
 			base.Tools[k] = v
@@ -175,29 +136,6 @@ func mergeConfigs(base, override *AppConfig) {
 		base.Managed = override.Managed
 	}
 }
-
-func migrateManagedConfig() ([]ManagedInstance, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, err
-	}
-	path := filepath.Join(home, ".devtool", "managed.json")
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	var oldCfg struct {
-		Instances []ManagedInstance `json:"instances"`
-	}
-	if err := json.Unmarshal(data, &oldCfg); err != nil {
-		return nil, err
-	}
-
-	return oldCfg.Instances, nil
-}
-
 
 // Save writes the application configuration atomically
 func Save(cfg *AppConfig) error {

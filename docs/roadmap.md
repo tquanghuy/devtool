@@ -62,7 +62,7 @@ This document outlines the planned features and long-term vision for `devtool`. 
 - [ ] **Traffic Interception (Proxy)**: Inspect HTTP/gRPC traffic between services bound to local ports.
 - [ ] **AI-Powered Diagnostics**: Automated analysis of error logs and startup failures with suggested fixes.
 - [ ] **Performance Profiling**: One-click `pprof` or flamegraph generation for supported tool runtimes.
-- [ ] **Just-in-time Port Allocator**: when adding a tool, suggest the next free port and pre-fill the identifier. *(new)*
+- [x] **Just-in-time Port Allocator**: when adding a tool, suggest the next free port and pre-fill the identifier. *(new)*
 - [ ] **Log Follow + Filter**: `f` on any tool opens a tailing log view with regex highlight and in-buffer search. *(new)*
 - [ ] **Recipe Sharing**: `devtool add <url>` pulls a signed tool definition and prompts for approval before trust. *(new)*
 - [ ] **AI Log Triage**: on a failed `start_cmd`, offer a `?` action that summarizes stderr via an LLM endpoint. *(new)*
@@ -90,7 +90,7 @@ This document outlines the planned features and long-term vision for `devtool`. 
 This checklist tracks the implementation progress of new items, sorted by prioritization (Impact × Effort).
 
 - [x] **#01: Async Status Polling** (Section 1) • Impact: L • Effort: S
-- [ ] **#02: Just-in-time Port Allocator** (Section 6) • Impact: L • Effort: S (Deps: Identifier bug fix)
+- [x] **#02: Just-in-time Port Allocator** (Section 6) • Impact: L • Effort: S (Deps: Identifier bug fix)
 - [ ] **#03: Log Follow + Filter** (Section 6) • Impact: L • Effort: M (Deps: Async polling)
 - [ ] **#04: Docker Compose Import** (Section 4) • Impact: L • Effort: M
 - [ ] **#05: Metric Sparklines** (Section 1) • Impact: M • Effort: S (Deps: Async polling)

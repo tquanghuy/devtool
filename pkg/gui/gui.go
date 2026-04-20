@@ -2,6 +2,7 @@ package gui
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/rivo/tview"
@@ -130,30 +131,66 @@ func (gui *Gui) Run() error {
 	// Background polling for resources and statuses
 	go func() {
 		ticker := time.NewTicker(2 * time.Second)
-		for {
-			select {
-			case <-ticker.C:
-				// 1. Get System Stats
-				cpu, _ := gui.OS.GetTotalCPUUsage()
-				mem, _ := gui.OS.GetTotalMemUsage()
+		for range ticker.C {
+			var (
+				cpu, mem     string
+				resources    []commands.ResourceStat
+				toolStatuses = make(map[string]string)
+				connStatuses = make(map[string]string)
+				allConns     = []ConnectionSpec{}
+			)
 
-				// 2. Get Top Processes
-				topProcs, _ := gui.OS.GetTopProcesses(100)
+			var wg sync.WaitGroup
 
-				// 3. Poll Tool Statuses
-				toolStatuses := make(map[string]string)
-				for _, tool := range gui.State.Tools {
-					status := "STOPPED"
-					checkCmd := gui.OS.FormatCommand(tool.Definition.CheckCmd, tool.Instance.Port)
-					if gui.OS.CheckToolStatus(checkCmd) {
-						status = "RUNNING"
-					}
-					toolStatuses[tool.Instance.Identifier] = status
+			// 1. System Stats
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				cpu, _ = gui.OS.GetTotalCPUUsage()
+				mem, _ = gui.OS.GetTotalMemUsage()
+			}()
+
+			// 2. Top Processes
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				resources, _ = gui.OS.GetTopProcesses(50) // Reduced to 50 for performance
+			}()
+
+			// 3. Tool Statuses
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				// We can even parallelize per-tool checks if we want
+				type result struct {
+					id     string
+					status string
 				}
+				resChan := make(chan result, len(gui.State.Tools))
+				var toolWg sync.WaitGroup
+				for _, tool := range gui.State.Tools {
+					toolWg.Add(1)
+					go func(t ToolInstance) {
+						defer toolWg.Done()
+						status := "STOPPED"
+						checkCmd := gui.OS.FormatCommand(t.Definition.CheckCmd, t.Instance.Port)
+						if gui.OS.CheckToolStatus(checkCmd) {
+							status = "RUNNING"
+						}
+						resChan <- result{t.Instance.Identifier, status}
+					}(tool)
+				}
+				toolWg.Wait()
+				close(resChan)
+				for r := range resChan {
+					toolStatuses[r.id] = r.status
+				}
+			}()
 
-				// 4. Poll Connection Statuses (all)
-				connStatuses := make(map[string]string)
-				allConns := []ConnectionSpec{}
+			// 4. Connection Statuses
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
 				for name, conn := range gui.Config.PostgresConns {
 					allConns = append(allConns, ConnectionSpec{Name: name, Host: conn.Host, Port: conn.Port})
 				}
@@ -161,23 +198,43 @@ func (gui *Gui) Run() error {
 					allConns = append(allConns, ConnectionSpec{Name: name, Host: conn.Host, Port: conn.Port})
 				}
 
-				for _, conn := range allConns {
-					status := gui.checkConnection("", conn.Host, conn.Port)
-					connStatuses[conn.Name] = status
+				type result struct {
+					name   string
+					status string
 				}
+				resChan := make(chan result, len(allConns))
+				var connWg sync.WaitGroup
+				for _, conn := range allConns {
+					connWg.Add(1)
+					go func(c ConnectionSpec) {
+						defer connWg.Done()
+						status := gui.checkConnection("", c.Host, c.Port)
+						resChan <- result{c.Name, status}
+					}(conn)
+				}
+				connWg.Wait()
+				close(resChan)
+				for r := range resChan {
+					connStatuses[r.name] = r.status
+				}
+			}()
 
-				gui.app.QueueUpdateDraw(func() {
-					gui.State.TotalCPU = cpu
-					gui.State.TotalMem = mem
-					gui.State.Resources = topProcs
-					gui.State.ToolStatuses = toolStatuses
-					gui.State.ConnStatuses = connStatuses
-					gui.State.Connections = allConns
-					
-					gui.renderResources()
-					gui.renderTools()
-				})
-			}
+			wg.Wait()
+
+			gui.app.QueueUpdateDraw(func() {
+				gui.State.TotalCPU = cpu
+				gui.State.TotalMem = mem
+				gui.State.Resources = resources
+				gui.State.ToolStatuses = toolStatuses
+				gui.State.ConnStatuses = connStatuses
+				gui.State.Connections = allConns
+
+				gui.renderResources()
+				gui.renderTools()
+				
+				// Also update details to reflect new status if something changed
+				gui.updateDetails()
+			})
 		}
 	}()
 

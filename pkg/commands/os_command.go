@@ -96,30 +96,66 @@ func (c *OSCommand) GetDockerStats() ([]ResourceStat, error) {
 }
 
 func (c *OSCommand) GetTotalCPUUsage() (string, error) {
-	// top -l 1 | grep "CPU usage" | awk '{print $3 + $5}'
-	out, err := c.RunCommand("top -l 1 | grep 'CPU usage' | awk '{print $3 + $5}'")
+	// ps -A -o %cpu | awk '{s+=$1} END {print s}'
+	out, err := c.RunCommand("ps -A -o %cpu | awk '{s+=$1} END {print s}'")
 	if err != nil {
 		return "0.0%", nil
 	}
+	// On Mac, ps %cpu can be > 100% total if multiple cores. 
+	// But it's a good relative indicator.
 	return out + "%", nil
 }
 
 func (c *OSCommand) GetTotalMemUsage() (string, error) {
-	// Used memory
-	used, err := c.RunCommand("top -l 1 | grep 'PhysMem' | awk '{print $2}'")
+	// Use vm_stat on macOS
+	out, err := c.RunCommand("vm_stat")
 	if err != nil {
-		used = "0G"
+		return "0 / 0G", nil
 	}
-	
+
+	lines := strings.Split(out, "\n")
+	var pageSize int64 = 4096 // Default
+	if len(lines) > 0 && strings.Contains(lines[0], "page size of") {
+		re := regexp.MustCompile(`page size of (\d+) bytes`)
+		match := re.FindStringSubmatch(lines[0])
+		if len(match) > 1 {
+			pageSize, _ = strconv.ParseInt(match[1], 10, 64)
+		}
+	}
+
+	var active, wired, compressed int64
+	for _, line := range lines {
+		if strings.HasPrefix(line, "Pages active:") {
+			active = c.extractPageCount(line)
+		} else if strings.HasPrefix(line, "Pages wired down:") {
+			wired = c.extractPageCount(line)
+		} else if strings.HasPrefix(line, "Pages occupied by compressor:") {
+			compressed = c.extractPageCount(line)
+		}
+	}
+
+	usedBytes := (active + wired + compressed) * pageSize
+	usedG := float64(usedBytes) / 1024 / 1024 / 1024
+
 	// Total memory
 	totalRaw, err := c.RunCommand("sysctl -n hw.memsize")
-	total := "0G"
+	totalG := "0G"
 	if err == nil {
 		bytes, _ := strconv.ParseInt(totalRaw, 10, 64)
-		total = fmt.Sprintf("%dG", bytes/1024/1024/1024)
+		totalG = fmt.Sprintf("%dG", bytes/1024/1024/1024)
 	}
-	
-	return fmt.Sprintf("%s / %s", used, total), nil
+
+	return fmt.Sprintf("%.1fG / %s", usedG, totalG), nil
+}
+
+func (c *OSCommand) extractPageCount(line string) int64 {
+	re := regexp.MustCompile(`(\d+)\.`)
+	match := re.FindAllStringSubmatch(line, -1)
+	if len(match) > 0 {
+		count, _ := strconv.ParseInt(match[len(match)-1][1], 10, 64)
+		return count
+	}
+	return 0
 }
 
 func (c *OSCommand) GetTopProcesses(limit int) ([]ResourceStat, error) {
@@ -205,6 +241,11 @@ func (c *OSCommand) GetProcessStats(processName string) (*ResourceStat, error) {
 		CPU:  fmt.Sprintf("%.1f%%", totalCPU),
 		MEM:  fmt.Sprintf("%.1f%%", totalMEM),
 	}, nil
+}
+
+// IsPortBusy returns true if the port is already in use
+func (c *OSCommand) IsPortBusy(port int) bool {
+	return c.DialTCP("localhost", port)
 }
 
 // GetFreePort finds the next available port starting from startPort
